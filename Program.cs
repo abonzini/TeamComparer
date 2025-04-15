@@ -7,19 +7,26 @@ using System.Linq;
 
 namespace TeamComparer
 {
+    public class TeamMatch
+    {
+        public TeamData Team;
+        public List<string> MonsInCommon;
+    }
+
     public class TeamData
     {
         public string Name;
         public bool Relevant = false;
         public HashSet<string> Mons = new HashSet<string>();
-        public SortedDictionary<int, List<TeamData>> TeamBySimilarities = new SortedDictionary<int, List<TeamData>>();
+        public SortedDictionary<int, List<TeamMatch>> TeamBySimilarities = new SortedDictionary<int, List<TeamMatch>>();
     }
 
     internal class Program
     {
-        public static int CompareTeams(TeamData t1, TeamData t2)
+        public static Tuple<int, List<string>> CompareTeams(TeamData t1, TeamData t2)
         {
             int res = 0;
+            List<string> monsInCommon = new List<string>();
             TeamData teamWithMostMons = (t1.Mons.Count >= t2.Mons.Count) ? t1 : t2;
             TeamData teamWithLeastMons = (t1.Mons.Count >= t2.Mons.Count) ? t2 : t1;
             foreach(string mon in teamWithMostMons.Mons)
@@ -27,16 +34,20 @@ namespace TeamComparer
                 if(teamWithLeastMons.Mons.Contains(mon))
                 {
                     res++;
+                    monsInCommon.Add(mon);
                 }
             }
-            return res;
+            return new Tuple<int, List<string>>(res, monsInCommon);
         }
         static void Main(string[] args)
         {
             int targetTeams; // Season 3 will be checked
+            int minScore;
             List<TeamData> teams = new List<TeamData>();
             Console.WriteLine("Which season you want to check?");
             targetTeams = int.Parse(Console.ReadLine());
+            Console.WriteLine("Min score to show?");
+            minScore = int.Parse(Console.ReadLine());
 
             string[] lines = File.ReadAllLines(".\\Teams.csv");
 
@@ -69,24 +80,26 @@ namespace TeamComparer
                     {
                         if (teams[i].Relevant ||  teams[j].Relevant)
                         {
-                            int similarities = CompareTeams(teams[i], teams[j]); // Compare and add to relevant teams
+                            Tuple<int, List<string>> similarities = CompareTeams(teams[i], teams[j]); // Compare and add to relevant teams
                             if (teams[i].Relevant)
                             {
-                                if (!teams[i].TeamBySimilarities.TryGetValue(similarities, out List<TeamData> value))
+                                if (!teams[i].TeamBySimilarities.TryGetValue(similarities.Item1, out List<TeamMatch> value))
                                 {
-                                    value = new List<TeamData>();
-                                    teams[i].TeamBySimilarities[similarities] = value;
+                                    value = new List<TeamMatch>();
+                                    teams[i].TeamBySimilarities[similarities.Item1] = value;
                                 }
-                                teams[i].TeamBySimilarities[similarities].Add(teams[j]);
+                                TeamMatch newMatch = new TeamMatch() { MonsInCommon = similarities.Item2, Team = teams[j] };
+                                teams[i].TeamBySimilarities[similarities.Item1].Add(newMatch);
                             }
                             if (teams[j].Relevant)
                             {
-                                if (!teams[j].TeamBySimilarities.TryGetValue(similarities, out List<TeamData> value))
+                                if (!teams[j].TeamBySimilarities.TryGetValue(similarities.Item1, out List<TeamMatch> value))
                                 {
-                                    value = new List<TeamData>();
-                                    teams[j].TeamBySimilarities[similarities] = value;
+                                    value = new List<TeamMatch>();
+                                    teams[j].TeamBySimilarities[similarities.Item1] = value;
                                 }
-                                teams[j].TeamBySimilarities[similarities].Add(teams[i]);
+                                TeamMatch newMatch = new TeamMatch() { MonsInCommon = similarities.Item2, Team = teams[i] };
+                                teams[j].TeamBySimilarities[similarities.Item1].Add(newMatch);
                             }
                         }
                     }
@@ -101,14 +114,19 @@ namespace TeamComparer
                     {
                         Console.WriteLine(team.Name);
                         writer.WriteLine(team.Name);
-                        foreach(KeyValuePair<int, List<TeamData>> kvp  in team.TeamBySimilarities)
+                        foreach(KeyValuePair<int, List<TeamMatch>> kvp  in team.TeamBySimilarities)
                         {
-                            Console.WriteLine(kvp.Key);
-                            writer.WriteLine(kvp.Key);
-                            foreach (TeamData otherTeam in kvp.Value)
+                            if(kvp.Key >= minScore)
                             {
-                                Console.WriteLine("\t" + otherTeam.Name);
-                                writer.WriteLine("\t" + otherTeam.Name);
+                                Console.WriteLine("\t- "+kvp.Key+" mons in common:");
+                                writer.WriteLine("\t- " + kvp.Key+ " mons in common:");
+                                foreach (TeamMatch otherTeam in kvp.Value)
+                                {
+                                    Console.Write("\t\t- " + otherTeam.Team.Name + ": Shared ");
+                                    writer.Write("\t\t- " + otherTeam.Team.Name + ": Shared ");
+                                    Console.WriteLine(String.Join(",", otherTeam.MonsInCommon));
+                                    writer.WriteLine(String.Join(",", otherTeam.MonsInCommon));
+                                }
                             }
                         }
                     }
@@ -121,16 +139,21 @@ namespace TeamComparer
                     {
                         Console.WriteLine(team.Name);
                         writer.WriteLine(team.Name);
-                        foreach (KeyValuePair<int, List<TeamData>> kvp in team.TeamBySimilarities)
+                        foreach (KeyValuePair<int, List<TeamMatch>> kvp in team.TeamBySimilarities)
                         {
-                            Console.WriteLine(kvp.Key);
-                            writer.WriteLine(kvp.Key);
-                            foreach (TeamData otherTeam in kvp.Value)
+                            if (kvp.Key >= minScore)
                             {
-                                if(otherTeam.Relevant)
+                                Console.WriteLine("\t- " + kvp.Key + " mons in common:");
+                                writer.WriteLine("\t- " + kvp.Key + " mons in common:");
+                                foreach (TeamMatch otherTeam in kvp.Value)
                                 {
-                                    Console.WriteLine("\t" + otherTeam.Name);
-                                    writer.WriteLine("\t" + otherTeam.Name);
+                                    if (otherTeam.Team.Relevant)
+                                    {
+                                        Console.Write("\t\t- " + otherTeam.Team.Name + ": Shared ");
+                                        writer.Write("\t\t- " + otherTeam.Team.Name + ": Shared ");
+                                        Console.WriteLine(String.Join(",", otherTeam.MonsInCommon));
+                                        writer.WriteLine(String.Join(",", otherTeam.MonsInCommon));
+                                    }
                                 }
                             }
                         }
