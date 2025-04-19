@@ -19,6 +19,11 @@ namespace TeamComparer
         public bool Relevant = false;
         public HashSet<string> Mons = new HashSet<string>();
         public SortedDictionary<int, List<TeamMatch>> TeamBySimilarities = new SortedDictionary<int, List<TeamMatch>>();
+
+        public override string ToString()
+        {
+            return Name;
+        }
     }
 
     internal class Program
